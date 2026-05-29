@@ -78,6 +78,30 @@ python starting.py
 `starting.py` will automatically install `llama-cpp-python` (CPU-only, no compiler needed) and check for the model file before launching the server.
 
 ---
+**3. for docker compose**
+```compose.yml
+services:
+  searcherr:
+    image: soli1239/searcherr:latest
+    container_name: searcherr
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config:/app/config
+      - ./models:/app/models
+    environment:
+      # All values come from .env — edit that file, not this one
+      PROWLARR_URL: "${PROWLARR_URL}"
+      PROWLARR_API_KEY: "${PROWLARR_API_KEY}"
+      BEARER_TOKEN: "${BEARER_TOKEN}"
+      MODEL_FILENAME: "${MODEL_FILENAME:-Phi-3.5-mini-instruct-Q4_K_M.gguf}"
+      N_CTX: "${N_CTX:-4096}"
+      N_THREADS: "${N_THREADS:-4}"
+      REGEX_RULE_THRESHOLD: "${REGEX_RULE_THRESHOLD:-5}"
+      EXPLORATION_FACTOR: "${EXPLORATION_FACTOR:-0.1}"
+
+```
 
 ## AI Model (Optional)
 
@@ -138,6 +162,3 @@ searcherr/
 
 ---
 
-## License
-
-MIT
