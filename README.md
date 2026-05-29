@@ -61,9 +61,20 @@ sudo nano .env
 
 Edit `.env`:
 ```env
-PROWLARR_URL=http://your-prowlarr-host:9696
-PROWLARR_API_KEY=your-api-key-here
-BEARER_TOKEN=change-this-to-a-strong-secret
+PROWLARR_URL=<your prowlarr url>
+PROWLARR_API_KEY=<Your api key>
+
+# ── Security ──────────────────────────────────────────────────────────────────
+BEARER_TOKEN=changeme-secret-token #optional
+
+# ── AI Model (optional) ───────────────────────────────────────────────────────
+MODEL_FILENAME=Phi-3.5-mini-instruct-Q4_K_M.gguf
+N_CTX=4096
+N_THREADS=4
+
+# ── Tuning ────────────────────────────────────────────────────────────────────
+REGEX_RULE_THRESHOLD=5 #optional or you an use as it is
+EXPLORATION_FACTOR=0.1 #optional or you an use as it is
 ```
 
 **3. Create required directories**
