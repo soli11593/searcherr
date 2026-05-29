@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Searcherr</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+  <style>
+    .score-bar  { transition: width 0.4s ease; }
+    .fade-in    { animation: fadeIn 0.25s ease forwards; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
+    .tab-btn    { color:#a89080; transition:color .15s; }
+    .tab-btn:hover { color:#e5d5c5; }
+    .active-tab { color:#d4a574; border-bottom:2px solid #d4a574; }
+    select option { background:#1a1410; }
+    /* Taupe accent custom properties */
+    .accent-bg   { background-color: oklch(55% 0.06 36.5); }
+    .accent-text { color: oklch(75% 0.06 36.5); }
+    .accent-border { border-color: oklch(45% 0.06 36.5); }
+    /* All filter inputs and selects share the same taupe tone */
+    #f-text, #f-codec, #f-res, #f-source, #f-group, #f-minsize, #f-maxsize {
+      background-color: oklch(22% 0.013 36.5);
+    }
+    #searchHistoryList li:hover {
+      background-color: oklch(30% 0.013 36.5);
+    }
+  </style>
+</head>
+<body class="text-gray-100 min-h-screen font-sans" style="background-color: oklch(21.6% 0.006 56.043)">
+
+<!-- ── Header ── -->
+<header class="border-b border-gray-200 px-6 py-3 flex items-center justify-between relative sticky top-0 z-10 bg-white">
+  <h1 class="text-xl font-bold tracking-tight text-black shrink-0 cursor-pointer select-none" onclick="resetToHome()">Searcherr</h1>
+  <img src="/static/logo.png" alt="Logo" class="h-10 w-auto object-contain absolute left-1/2 -translate-x-1/2" />
+  <span class="text-xs text-gray-400 shrink-0 hidden sm:block">Self-learning · Prowlarr-powered</span>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-6 space-y-5">
+
+  <!-- ── Search bar ── -->
+  <section id="searchSection" class="space-y-3">
+    <div class="flex gap-2 relative">
+      <div class="flex-1 relative">
+        <input id="prompt" type="text"
+          placeholder='e.g. "Re Zero season 4 AV1 under 500MB"'
+          autocomplete="off"
+          class="w-full border border-gray-700 rounded-lg px-4 py-3 text-sm
+                 focus:outline-none focus:ring-2 focus:ring-amber-600 placeholder-gray-600"
+          style="background-color: oklch(26.8% 0.011 36.5)" />
+        <!-- Search history dropdown -->
+        <div id="searchHistoryDrop"
+          class="hidden absolute top-full left-0 right-0 mt-1 border border-amber-900/40
+                 rounded-lg shadow-xl z-20 max-h-64 overflow-y-auto"
+          style="background-color: oklch(22% 0.013 36.5)">
+          <div class="flex items-center justify-between px-3 py-2 border-b border-amber-900/30">
+            <span class="text-xs text-gray-500 uppercase tracking-wider">Recent Searches</span>
+            <button onclick="clearAll('searches'); hideSearchHistory()"
+              class="text-xs text-red-500 hover:text-red-400 transition-colors">Clear all</button>
+          </div>
+          <ul id="searchHistoryList" class="py-1"></ul>
+        </div>
+      </div>
+      <button id="searchBtn" onclick="doSearch()"
+        class="accent-bg hover:opacity-90 active:opacity-75 text-white
+               px-5 py-3 rounded-lg text-sm font-medium transition-colors">
+        Search
+      </button>
+      <button id="cancelBtn" onclick="cancelSearch()" style="display:none"
+        class="bg-red-700 hover:bg-red-600 active:bg-red-800 text-white
+               px-5 py-3 rounded-lg text-sm font-medium transition-colors">
+        ✕ Cancel
+      </button>
+    </div>
+
+    <!-- Search options -->
+    <div class="flex flex-wrap gap-4 text-xs text-gray-400 items-center">
+      <label class="flex items-center gap-2">
+        Exploration
+        <input id="exploration" type="range" min="0" max="1" step="0.05" value="0.1"
+               class="accent-amber-600 w-24" oninput="$('explorationVal').textContent=this.value" />
+        <span id="explorationVal">0.1</span>
+      </label>
+      <label class="flex items-center gap-2">
+        Results per page
+        <select id="pageSize" class="border border-amber-900/40 rounded px-2 py-1 text-gray-200"
+          style="background-color: oklch(22% 0.013 36.5)" onchange="applyFilters()">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="30">30</option>
+        </select>
+      </label>
+    </div>
+  </section>
+
+  <!-- ── Parsed intent ── -->
+  <div id="intentBox" class="hidden border border-gray-700 rounded-lg px-4 py-3 text-xs space-y-1"
+    style="background-color: oklch(26.8% 0.011 36.5)">
+    <p class="text-gray-500 uppercase tracking-wider font-semibold">Parsed Intent</p>
+    <div id="intentContent" class="flex flex-wrap gap-2"></div>
+  </div>
+
+  <!-- ── Filter bar (shown after search) ── -->
+  <div id="filterBar" class="hidden border border-gray-700 rounded-lg px-4 py-3 space-y-3"
+    style="background-color: oklch(26.8% 0.011 36.5)">
+    <div class="flex items-center justify-between">
+      <p class="text-xs text-gray-400 font-semibold uppercase tracking-wider">Filter Results</p>
+      <button onclick="clearFilters()" class="text-xs text-gray-500 hover:text-gray-300 transition-colors">
+        Clear all
+      </button>
+    </div>
+
+    <!-- Text search -->
+    <div>
+      <input id="f-text" type="text" placeholder="Filter by title keyword…"
+        oninput="applyFilters()"
+        class="w-full border border-amber-900/40 rounded-lg px-3 py-2 text-sm
+               focus:outline-none focus:ring-2 focus:ring-amber-600 placeholder-gray-600" />
+    </div>
+
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+
+      <!-- Codec -->
+      <div class="space-y-1">
+        <label class="text-gray-500">Codec</label>
+        <select id="f-codec" onchange="applyFilters()"
+          class="w-full border border-amber-900/40 rounded px-2 py-1.5 text-gray-200">
+          <option value="">Any</option>
+          <option>AV1</option><option>HEVC</option><option>AVC</option>
+        </select>
+      </div>
+
+      <!-- Resolution -->
+      <div class="space-y-1">
+        <label class="text-gray-500">Resolution</label>
+        <select id="f-res" onchange="applyFilters()"
+          class="w-full border border-amber-900/40 rounded px-2 py-1.5 text-gray-200">
+          <option value="">Any</option>
+          <option>2160p</option><option>4K</option><option>1080p</option>
+          <option>720p</option><option>480p</option>
+        </select>
+      </div>
+
+      <!-- Source -->
+      <div class="space-y-1">
+        <label class="text-gray-500">Source</label>
+        <select id="f-source" onchange="applyFilters()"
+          class="w-full border border-amber-900/40 rounded px-2 py-1.5 text-gray-200">
+          <option value="">Any</option>
+          <option>BLURAY</option><option>WEB-DL</option><option>WEBRIP</option>
+          <option>HDTV</option><option>AMZN</option><option>NF</option>
+        </select>
+      </div>
+
+      <!-- Group -->
+      <div class="space-y-1">
+        <label class="text-gray-500">Group</label>
+        <select id="f-group" onchange="applyFilters()"
+          class="w-full border border-amber-900/40 rounded px-2 py-1.5 text-gray-200">
+          <option value="">Any</option>
+        </select>
+      </div>
+
+      <!-- Min size -->
+      <div class="space-y-1">
+        <label class="text-gray-500">Min size (MB)</label>
+        <input id="f-minsize" type="number" min="0" placeholder="0"
+          oninput="applyFilters()"
+          class="w-full border border-amber-900/40 rounded px-2 py-1.5 text-gray-200 placeholder-gray-600 [appearance:textfield]" />
+      </div>
+
+      <!-- Max size -->
+      <div class="space-y-1">
+        <label class="text-gray-500">Max size (MB)</label>
+        <input id="f-maxsize" type="number" min="0" placeholder="∞"
+          oninput="applyFilters()"
+          class="w-full border border-amber-900/40 rounded px-2 py-1.5 text-gray-200 placeholder-gray-600 [appearance:textfield]" />
+      </div>
+
+    </div>
+
+    <!-- Active filter summary + result count -->
+    <div class="flex items-center justify-between pt-1">
+      <div id="activeFilters" class="flex flex-wrap gap-1.5"></div>
+      <span id="filterCount" class="text-xs text-gray-500"></span>
+    </div>
+  </div>
+
+  <!-- ── Status ── -->
+  <div id="status" class="text-sm text-gray-400 hidden"></div>
+
+  <!-- ── Results ── -->
+  <section id="results" class="space-y-2"></section>
+
+  <!-- ── Pagination ── -->
+  <div id="pagination" class="hidden flex flex-wrap items-center justify-center gap-1 py-4 text-sm"></div>
+
+  <!-- ── Bottom tabs ── -->
+  <section class="mt-10">
+    <div class="flex gap-1 border-b border-gray-800 mb-4">
+      <button onclick="showTab('history')" id="tab-history" class="tab-btn active-tab px-4 py-2 text-sm rounded-t">Downloads</button>
+      <button onclick="showTab('searches')" id="tab-searches" class="tab-btn px-4 py-2 text-sm rounded-t">Search History</button>
+      <button onclick="showTab('weights')" id="tab-weights" class="tab-btn px-4 py-2 text-sm rounded-t">Weights</button>
+      <button onclick="showTab('rules')"   id="tab-rules"   class="tab-btn px-4 py-2 text-sm rounded-t">Regex Rules</button>
+    </div>
+    <div id="panel-history"  class="tab-panel"></div>
+    <div id="panel-searches" class="tab-panel hidden"></div>
+    <div id="panel-weights"  class="tab-panel hidden"></div>
+    <div id="panel-rules"    class="tab-panel hidden"></div>
+  </section>
+
+</main>
+
+<script>
+// ── Globals ───────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+let allResults    = [];
+let filteredResults = [];
+let lastQuery     = '';
+let currentPage   = 1;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function badge(text, color = 'indigo') {
+  const c = {
+    indigo: 'bg-indigo-900 text-amber-300',
+    green:  'bg-green-900 text-green-300',
+    red:    'bg-red-900 text-red-300',
+    yellow: 'bg-yellow-900 text-yellow-300',
+    gray:   'bg-gray-800 text-gray-300',
+    orange: 'bg-orange-900 text-orange-300',
+  };
+  return `<span class="px-2 py-0.5 rounded text-xs font-mono ${c[color]||c.gray}">${text}</span>`;
+}
+
+function sizeFmt(mb) {
+  if (!mb && mb !== 0) return '?';
+  return mb >= 1024 ? (mb / 1024).toFixed(2) + ' GB' : mb.toFixed(0) + ' MB';
+}
+
+function showStatus(msg, cls = 'text-gray-400') {
+  const el = $('status');
+  el.textContent = msg;
+  el.className = 'text-sm ' + cls;
+  el.classList.remove('hidden');
+}
+
+// ── Search ────────────────────────────────────────────────────────────────────
+let currentAbortController = null;
+
+function cancelSearch() {
+  if (currentAbortController) {
+    currentAbortController.abort();
+    currentAbortController = null;
+  }
+}
+
+async function doSearch() {
+  const prompt = $('prompt').value.trim();
+  if (!prompt) return;
+  lastQuery = prompt;
+
+  // Cancel any in-flight search
+  if (currentAbortController) currentAbortController.abort();
+  currentAbortController = new AbortController();
+
+  $('searchBtn').style.display = 'none';
+  $('cancelBtn').style.display = '';
+  $('results').innerHTML = '';
+  $('status').classList.add('hidden');
+  $('filterBar').classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: currentAbortController.signal,
+      body: JSON.stringify({
+        prompt,
+        exploration: parseFloat($('exploration').value),
+        limit: 200,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      const detail = data?.detail;
+      const msg = typeof detail === 'string' ? detail
+                : Array.isArray(detail)       ? detail.map(d => d.msg || JSON.stringify(d)).join(', ')
+                : res.statusText;
+      throw new Error(msg);
+    }
+
+    allResults = data.results;
+    filteredResults = data.results;
+    renderIntent(data.intent);
+    populateGroupFilter(allResults);
+    currentPage = 1;
+    applyFilters();
+    $('filterBar').classList.remove('hidden');
+    showStatus(`${data.total} results found`, 'text-gray-400');
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      showStatus('Search cancelled.', 'text-gray-500');
+    } else {
+      showStatus('Error: ' + e.message, 'text-red-400');
+    }
+  } finally {
+    currentAbortController = null;
+    $('searchBtn').style.display = '';
+    $('cancelBtn').style.display = 'none';
+  }
+}
+
+// ── Intent display ────────────────────────────────────────────────────────────
+function renderIntent(intent) {
+  const items = [];
+  if (intent.query)       items.push(badge(intent.query, 'indigo'));
+  if (intent.codec)       items.push(badge('codec: ' + intent.codec, 'green'));
+  if (intent.resolution)  items.push(badge('res: ' + intent.resolution, 'green'));
+  if (intent.max_size_mb) items.push(badge('max: ' + sizeFmt(intent.max_size_mb), 'yellow'));
+  if (intent.min_size_mb) items.push(badge('min: ' + sizeFmt(intent.min_size_mb), 'yellow'));
+  if (intent.source)      items.push(badge('src: ' + intent.source, 'gray'));
+  if (intent.group)       items.push(badge('group: ' + intent.group, 'gray'));
+  $('intentContent').innerHTML = items.join('');
+  $('intentBox').classList.toggle('hidden', items.length === 0);
+}
+
+// ── Group filter population ───────────────────────────────────────────────────
+function populateGroupFilter(results) {
+  const groups = [...new Set(results.map(r => r.group_name).filter(Boolean))].sort();
+  const sel = $('f-group');
+  // Keep "Any" option, replace the rest
+  sel.innerHTML = '<option value="">Any</option>' +
+    groups.map(g => `<option>${g}</option>`).join('');
+}
+
+// ── Filtering ─────────────────────────────────────────────────────────────────
+function getFilters() {
+  return {
+    text:    $('f-text').value.trim().toLowerCase(),
+    codec:   $('f-codec').value.trim().toUpperCase(),
+    res:     $('f-res').value.trim().toUpperCase(),
+    source:  $('f-source').value.trim().toUpperCase(),
+    group:   $('f-group').value.trim(),
+    minSize: parseFloat($('f-minsize').value) || 0,
+    maxSize: parseFloat($('f-maxsize').value) || Infinity,
+  };
+}
+
+function applyFilters() {
+  const f = getFilters();
+  const hasFilter = f.text || f.codec || f.res || f.source || f.group || f.minSize > 0 || f.maxSize < Infinity;
+
+  filteredResults = allResults.filter(r => {
+    if (f.text   && !(r.title || '').toLowerCase().includes(f.text))  return false;
+    if (f.codec  && (r.codec      || '').toUpperCase()  !== f.codec)  return false;
+    if (f.res    && (r.resolution || '').toUpperCase()  !== f.res)    return false;
+    if (f.source && (r.source     || '').toUpperCase()  !== f.source) return false;
+    if (f.group  && r.group_name !== f.group)                         return false;
+    if (f.minSize > 0       && (r.size_mb || 0) < f.minSize)          return false;
+    if (f.maxSize < Infinity && (r.size_mb || 0) > f.maxSize)         return false;
+    return true;
+  });
+
+  currentPage = 1;
+  renderPage();
+
+  $('filterCount').textContent = hasFilter
+    ? `${filteredResults.length} of ${allResults.length} shown`
+    : `${allResults.length} results`;
+
+  // Active filter chips
+  const chips = [];
+  if (f.text)            chips.push(filterChip('text: "' + f.text + '"', 'f-text', true));
+  if (f.codec)           chips.push(filterChip('codec: ' + f.codec,    'f-codec'));
+  if (f.res)             chips.push(filterChip('res: '   + f.res,      'f-res'));
+  if (f.source)          chips.push(filterChip('src: '   + f.source,   'f-source'));
+  if (f.group)           chips.push(filterChip('group: ' + f.group,    'f-group'));
+  if (f.minSize > 0)     chips.push(filterChip('min: '   + sizeFmt(f.minSize), 'f-minsize'));
+  if (f.maxSize < Infinity) chips.push(filterChip('max: ' + sizeFmt(f.maxSize), 'f-maxsize'));
+  $('activeFilters').innerHTML = chips.join('');
+}
+
+function filterChip(label, inputId, isText = false) {
+  return `<span class="flex items-center gap-1 bg-indigo-900 text-amber-300 px-2 py-0.5 rounded text-xs">
+    ${label}
+    <button onclick="clearFilter('${inputId}')" class="hover:text-white leading-none">×</button>
+  </span>`;
+}
+
+function clearFilter(inputId) {
+  $(inputId).value = '';
+  applyFilters();
+}
+
+function clearFilters() {
+  ['f-text','f-codec','f-res','f-source','f-group'].forEach(id => $(id).value = '');
+  ['f-minsize','f-maxsize'].forEach(id => $(id).value = '');
+  applyFilters();
+}
+
+// ── Pagination ────────────────────────────────────────────────────────────────
+function getPageSize() { return parseInt($('pageSize').value) || 20; }
+
+function renderPage() {
+  const size  = getPageSize();
+  const total = filteredResults.length;
+  const pages = Math.max(1, Math.ceil(total / size));
+  if (currentPage > pages) currentPage = pages;
+  const start = (currentPage - 1) * size;
+  renderResults(filteredResults.slice(start, start + size));
+  renderPagination(pages);
+}
+
+function renderPagination(totalPages) {
+  const pg = $('pagination');
+  if (totalPages <= 1) { pg.classList.add('hidden'); return; }
+  pg.classList.remove('hidden');
+
+  const btnCls = 'px-3 py-1.5 rounded text-xs border transition-colors';
+  const activeCls = 'border-amber-700 text-amber-300 font-bold';
+  const normalCls = 'border-gray-700 text-gray-400 hover:border-amber-700 hover:text-amber-300';
+  const disabledCls = 'border-gray-800 text-gray-600 cursor-not-allowed';
+
+  // Build page number window (like Google: 1 ... 4 5 [6] 7 8 ... 12)
+  const pages = [];
+  const delta = 2;
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= currentPage - delta && i <= currentPage + delta)) {
+      pages.push(i);
+    } else if (pages[pages.length - 1] !== '...') {
+      pages.push('...');
+    }
+  }
+
+  let html = '';
+
+  // Previous
+  html += `<button onclick="goPage(${currentPage - 1})"
+    class="${btnCls} ${currentPage === 1 ? disabledCls : normalCls}"
+    ${currentPage === 1 ? 'disabled' : ''}>Previous</button>`;
+
+  // Page numbers
+  pages.forEach(p => {
+    if (p === '...') {
+      // Jump-to input replaces ellipsis
+      html += `<span class="text-gray-600 px-1">...</span>`;
+    } else {
+      html += `<button onclick="goPage(${p})"
+        class="${btnCls} ${p === currentPage ? activeCls : normalCls}">${p}</button>`;
+    }
+  });
+
+  // Next
+  html += `<button onclick="goPage(${currentPage + 1})"
+    class="${btnCls} ${currentPage === totalPages ? disabledCls : normalCls}"
+    ${currentPage === totalPages ? 'disabled' : ''}>Next</button>`;
+
+  // Jump to page
+  html += `<span class="text-gray-500 text-xs ml-2">Go to</span>
+    <input type="number" min="1" max="${totalPages}" value="${currentPage}"
+      onchange="goPage(parseInt(this.value))"
+      class="w-14 text-center text-xs border border-gray-700 rounded px-1 py-1.5 text-gray-200
+             [appearance:textfield]"
+      style="background-color: oklch(22% 0.013 36.5)" />
+    <span class="text-gray-500 text-xs">of ${totalPages}</span>`;
+
+  pg.innerHTML = html;
+}
+
+function goPage(n) {
+  const size  = getPageSize();
+  const pages = Math.max(1, Math.ceil(filteredResults.length / size));
+  currentPage = Math.max(1, Math.min(n, pages));
+  renderPage();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── Render results ────────────────────────────────────────────────────────────
+function renderResults(results) {
+  const container = $('results');
+  if (!results.length) {
+    container.innerHTML = '<p class="text-gray-500 text-sm py-4">No results match the current filters.</p>';
+    return;
+  }
+
+  // Score bar relative to the best non-failing result
+  const topScore = Math.max(...results.filter(r => !r.constraint_fail).map(r => r.score), 1);
+
+  container.innerHTML = results.map(r => {
+    const fail = r.constraint_fail;
+    const pct  = fail ? 0 : Math.max(0, Math.min(100, (r.score / topScore) * 100)).toFixed(0);
+    const borderCls = fail ? 'border-gray-800 opacity-60' : 'border-gray-700 hover:border-amber-700';
+
+    return `
+    <div class="fade-in border ${borderCls} rounded-lg p-4 space-y-2 transition-colors"
+         style="background-color: oklch(26.8% 0.011 36.5)">
+
+      <!-- Title row -->
+      <div class="flex items-start justify-between gap-2">
+        <p class="text-sm font-medium leading-snug flex-1">${r.title}</p>
+        <div class="flex items-center gap-2 shrink-0">
+          ${fail ? '<span class="text-xs text-orange-400 font-mono">off-target</span>' : ''}
+          <span class="text-xs font-mono ${fail ? 'text-gray-500' : 'text-amber-300'}">
+            ${r.score.toFixed(0)} pts
+          </span>
+        </div>
+      </div>
+
+      <!-- Score bar -->
+      <div class="h-1 bg-gray-800 rounded-full overflow-hidden">
+        <div class="score-bar h-full ${fail ? 'bg-gray-700' : 'bg-amber-700'} rounded-full"
+             style="width:${pct}%"></div>
+      </div>
+
+      <!-- Meta badges -->
+      <div class="flex flex-wrap gap-1.5 text-xs items-center">
+        ${r.size_mb    ? badge(sizeFmt(r.size_mb), 'gray')                          : ''}
+        ${r.codec      ? badge(r.codec, r.codec === 'AV1' ? 'green' : 'gray')       : ''}
+        ${r.resolution ? badge(r.resolution, 'green')                               : ''}
+        ${r.source     ? badge(r.source, 'gray')                                    : ''}
+        ${r.group_name ? badge(r.group_name, 'indigo')                              : ''}
+        ${r.seeders    ? badge(r.seeders + ' seeds', r.seeders > 10 ? 'green' : 'yellow') : badge('0 seeds', 'red')}
+        <span class="text-gray-600 text-xs">${r.indexer || ''}</span>
+      </div>
+
+      <!-- Score breakdown (collapsed) -->
+      <details class="text-xs text-gray-500">
+        <summary class="cursor-pointer hover:text-gray-300 select-none">Score breakdown</summary>
+        <ul class="mt-1 space-y-0.5 pl-3 pt-1">
+          ${(r.score_reasons || []).map(s => `<li>${s}</li>`).join('')}
+        </ul>
+      </details>
+
+      <!-- Actions -->
+      <div class="flex gap-2 pt-1">
+        ${r.download_url ? `
+        <button onclick='selectTorrent(${JSON.stringify(r).replace(/'/g, "&#39;")})'
+          class="text-xs accent-bg hover:opacity-90 text-white px-3 py-1.5 rounded transition-colors">
+          ${r.magnet_url && !r.download_url.startsWith('http') ? 'Magnet' : 'Download'}
+        </button>` : '<span class="text-xs text-gray-600 italic">no link available</span>'}
+        ${r.info_url ? `
+        <a href="${r.info_url}" target="_blank"
+           class="text-xs text-gray-400 hover:text-gray-200 px-3 py-1.5 rounded border border-gray-700 transition-colors">
+          Info
+        </a>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Select / learn ────────────────────────────────────────────────────────────
+async function selectTorrent(r) {
+  if (r.download_url) {
+    // Magnet links work better via location.href; .torrent files via window.open
+    if (r.download_url.startsWith('magnet:')) {
+      window.location.href = r.download_url;
+    } else {
+      window.open(r.download_url, '_blank');
+    }
+  }
+
+  await fetch('/api/select', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query:        lastQuery,
+      torrent_title: r.title,
+      group_name:   r.group_name,
+      codec:        r.codec,
+      resolution:   r.resolution,
+      source:       r.source,
+      size_bytes:   r.size_bytes,
+      info_url:     r.info_url,
+    }),
+  });
+  loadHistory();
+  loadWeights();
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function showTab(name) {
+  ['history','searches','weights','rules'].forEach(t => {
+    $('panel-' + t).classList.toggle('hidden', t !== name);
+    $('tab-'   + t).classList.toggle('active-tab', t === name);
+  });
+  if (name === 'history')  loadHistory();
+  if (name === 'searches') loadSearchHistory();
+  if (name === 'weights')  loadWeights();
+  if (name === 'rules')    loadRules();
+}
+
+async function loadHistory() {
+  const { history } = await fetch('/api/history').then(r => r.json());
+  $('panel-history').innerHTML = history.length
+    ? `<div class="flex justify-end mb-2">
+        <button onclick="clearAll('history')"
+          class="text-xs text-red-400 hover:text-red-300 border border-red-900 hover:border-red-700
+                 px-3 py-1 rounded transition-colors">
+          Clear All
+        </button>
+       </div>
+       <div class="overflow-x-auto"><table class="w-full text-xs text-left">
+        <thead><tr class="text-gray-500 border-b border-gray-800">
+          <th class="pb-2 pr-4">Title</th><th class="pb-2 pr-4">Codec</th>
+          <th class="pb-2 pr-4">Res</th><th class="pb-2 pr-4">Group</th>
+          <th class="pb-2 pr-4">Date</th><th class="pb-2"></th>
+        </tr></thead>
+        <tbody>${history.map(h => `
+          <tr class="border-b border-gray-900 hover:bg-gray-900 group">
+            <td class="py-1.5 pr-4 max-w-xs truncate" title="${h.torrent_title}">
+              ${h.info_url
+                ? `<a href="${h.info_url}" target="_blank"
+                     class="text-amber-300 hover:text-indigo-200 hover:underline transition-colors">
+                     ${h.torrent_title}
+                   </a>`
+                : h.torrent_title}
+            </td>
+            <td class="py-1.5 pr-4">${h.codec || '—'}</td>
+            <td class="py-1.5 pr-4">${h.resolution || '—'}</td>
+            <td class="py-1.5 pr-4 text-amber-400">${h.group_name || '—'}</td>
+            <td class="py-1.5 pr-4 text-gray-500">${(h.chosen_at || '').slice(0, 10)}</td>
+            <td class="py-1.5">
+              <button onclick="deleteEntry('history', ${h.id})"
+                class="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-400
+                       transition-opacity px-1" title="Delete">✕</button>
+            </td>
+          </tr>`).join('')}
+        </tbody></table></div>`
+    : '<p class="text-gray-500 text-sm">No history yet.</p>';
+}
+
+async function loadWeights() {
+  const { weights } = await fetch('/api/weights').then(r => r.json());
+  $('panel-weights').innerHTML = weights.length
+    ? `<div class="flex justify-end mb-2">
+        <button onclick="clearAll('weights')"
+          class="text-xs text-red-400 hover:text-red-300 border border-red-900 hover:border-red-700
+                 px-3 py-1 rounded transition-colors">
+          Clear All
+        </button>
+       </div>
+       <div class="overflow-x-auto"><table class="w-full text-xs text-left">
+        <thead><tr class="text-gray-500 border-b border-gray-800">
+          <th class="pb-2 pr-4">Attribute</th><th class="pb-2 pr-4">Value</th>
+          <th class="pb-2 pr-4">Score</th><th class="pb-2 pr-4">Picks</th>
+          <th class="pb-2"></th>
+        </tr></thead>
+        <tbody>${weights.map(w => `
+          <tr class="border-b border-gray-900 hover:bg-gray-900 group">
+            <td class="py-1.5 pr-4 text-gray-400">${w.attribute}</td>
+            <td class="py-1.5 pr-4 font-mono">${w.value}</td>
+            <td class="py-1.5 pr-4 text-amber-300">${w.score.toFixed(1)}</td>
+            <td class="py-1.5 pr-4">${w.pick_count}</td>
+            <td class="py-1.5">
+              <button onclick="deleteEntry('weights', ${w.id})"
+                class="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-400
+                       transition-opacity px-1" title="Delete">✕</button>
+            </td>
+          </tr>`).join('')}
+        </tbody></table></div>`
+    : '<p class="text-gray-500 text-sm">No learned weights yet. Start downloading!</p>';
+}
+
+async function loadRules() {
+  const { rules } = await fetch('/api/rules').then(r => r.json());
+  $('panel-rules').innerHTML = rules.length
+    ? `<div class="flex justify-end mb-2">
+        <button onclick="clearAll('rules')"
+          class="text-xs text-red-400 hover:text-red-300 border border-red-900 hover:border-red-700
+                 px-3 py-1 rounded transition-colors">
+          Clear All
+        </button>
+       </div>
+       <div class="overflow-x-auto"><table class="w-full text-xs text-left">
+        <thead><tr class="text-gray-500 border-b border-gray-800">
+          <th class="pb-2 pr-4">Pattern</th><th class="pb-2 pr-4">Bonus</th>
+          <th class="pb-2 pr-4">Created</th><th class="pb-2"></th>
+        </tr></thead>
+        <tbody>${rules.map(r => `
+          <tr class="border-b border-gray-900 hover:bg-gray-900 group">
+            <td class="py-1.5 pr-4 font-mono text-green-400">${r.pattern}</td>
+            <td class="py-1.5 pr-4 text-amber-300">+${r.bonus}</td>
+            <td class="py-1.5 pr-4 text-gray-500">${(r.created_at || '').slice(0, 10)}</td>
+            <td class="py-1.5">
+              <button onclick="deleteEntry('rules', ${r.id})"
+                class="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-400
+                       transition-opacity px-1" title="Delete">✕</button>
+            </td>
+          </tr>`).join('')}
+        </tbody></table></div>`
+    : '<p class="text-gray-500 text-sm">No auto-generated rules yet.</p>';
+}
+
+// ── Delete helpers ────────────────────────────────────────────────────────────
+const sectionReload = { history: loadHistory, searches: loadSearchHistory, weights: loadWeights, rules: loadRules };
+const sectionLabel  = { history: 'download history entry', searches: 'search history entry', weights: 'weight', rules: 'regex rule' };
+
+async function deleteEntry(section, id) {
+  await fetch(`/api/${section}/${id}`, { method: 'DELETE' });
+  sectionReload[section]();
+}
+
+async function clearAll(section) {
+  const label = sectionLabel[section];
+  if (!confirm(`Delete ALL ${label} entries? This cannot be undone.`)) return;
+  await fetch(`/api/${section}`, { method: 'DELETE' });
+  sectionReload[section]();
+}
+
+// ── Search history tab ────────────────────────────────────────────────────────
+async function loadSearchHistory() {
+  const { searches } = await fetch('/api/searches').then(r => r.json());
+  $('panel-searches').innerHTML = searches.length
+    ? `<div class="flex justify-end mb-2">
+        <button onclick="clearAll('searches')"
+          class="text-xs text-red-400 hover:text-red-300 border border-red-900 hover:border-red-700
+                 px-3 py-1 rounded transition-colors">
+          Clear All
+        </button>
+       </div>
+       <div class="overflow-x-auto"><table class="w-full text-xs text-left">
+        <thead><tr class="text-gray-500 border-b border-gray-800">
+          <th class="pb-2 pr-4">Prompt</th><th class="pb-2 pr-4">Parsed Query</th>
+          <th class="pb-2 pr-4">Date</th><th class="pb-2"></th>
+        </tr></thead>
+        <tbody>${searches.map(s => `
+          <tr class="border-b border-gray-900 hover:bg-gray-900 group">
+            <td class="py-1.5 pr-4 max-w-xs">
+              <button data-prompt="${s.prompt.replace(/"/g,'&quot;')}" data-action="rerun"
+                class="text-left text-amber-300 hover:text-indigo-200 hover:underline transition-colors">
+                ${s.prompt}
+              </button>
+            </td>
+            <td class="py-1.5 pr-4 text-gray-400 font-mono">${s.query}</td>
+            <td class="py-1.5 pr-4 text-gray-500">${(s.searched_at || '').slice(0, 16).replace('T', ' ')}</td>
+            <td class="py-1.5">
+              <button onclick="deleteEntry('searches', ${s.id})"
+                class="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-400
+                       transition-opacity px-1" title="Delete">✕</button>
+            </td>
+          </tr>`).join('')}
+        </tbody></table></div>`
+    : '<p class="text-gray-500 text-sm">No search history yet.</p>';
+
+  // Attach click handlers via data attributes — avoids escaping issues
+  $('panel-searches').querySelectorAll('[data-action="rerun"]').forEach(btn => {
+    btn.addEventListener('click', () => rerunSearch(btn.dataset.prompt));
+  });
+}
+
+function rerunSearch(prompt) {
+  $('prompt').value = prompt;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  doSearch();
+}
+
+// ── Search history dropdown ───────────────────────────────────────────────────
+async function showSearchHistory() {
+  const { searches } = await fetch('/api/searches').then(r => r.json());
+  const list = $('searchHistoryList');
+  if (!searches.length) {
+    list.innerHTML = '<li class="px-3 py-2 text-xs text-gray-500">No recent searches</li>';
+  } else {
+    list.innerHTML = searches.map(s => `
+      <li class="flex items-center justify-between px-3 py-2 hover:bg-gray-800 group cursor-pointer">
+        <span data-prompt="${s.prompt.replace(/"/g,'&quot;')}" data-action="pick"
+          class="text-sm text-gray-200 truncate flex-1 cursor-pointer">${s.prompt}</span>
+        <span class="text-xs text-gray-600 ml-2 shrink-0">${(s.searched_at||'').slice(5,10)}</span>
+        <button onclick="event.stopPropagation(); deleteEntry('searches',${s.id}); showSearchHistory()"
+          class="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-400 ml-2 px-1 transition-opacity">✕</button>
+      </li>`).join('');
+
+    // Attach click handlers via data attributes
+    list.querySelectorAll('[data-action="pick"]').forEach(el => {
+      el.addEventListener('click', () => pickHistory(el.dataset.prompt));
+    });
+  }
+  $('searchHistoryDrop').classList.remove('hidden');
+}
+
+function hideSearchHistory() {
+  $('searchHistoryDrop').classList.add('hidden');
+}
+
+function pickHistory(prompt) {
+  hideSearchHistory();
+  $('prompt').value = prompt;
+  doSearch();
+}
+
+// ── Home / reset ─────────────────────────────────────────────────────────────
+function resetToHome() {
+  // Clear search state
+  allResults = [];
+  filteredResults = [];
+  lastQuery = '';
+  currentPage = 1;
+
+  // Reset UI
+  $('prompt').value = '';
+  $('results').innerHTML = '';
+  $('pagination').classList.add('hidden');
+  $('filterBar').classList.add('hidden');
+  $('intentBox').classList.add('hidden');
+  $('status').classList.add('hidden');
+  $('searchBtn').style.display = '';
+  $('cancelBtn').style.display = 'none';
+  clearFilters();
+
+  // Cancel any in-flight search
+  if (currentAbortController) {
+    currentAbortController.abort();
+    currentAbortController = null;
+  }
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  $('prompt').focus();
+}
+
+window.addEventListener('scroll', () => {});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+$('prompt').addEventListener('keydown', e => { if (e.key === 'Enter') { hideSearchHistory(); doSearch(); } });
+// Only show history dropdown on explicit user click, not programmatic focus
+$('prompt').addEventListener('click', () => showSearchHistory());
+$('prompt').addEventListener('input',  () => { if ($('prompt').value) hideSearchHistory(); else showSearchHistory(); });
+document.addEventListener('click', e => { if (!e.target.closest('#searchSection')) hideSearchHistory(); });
+loadHistory();
+</script>
+</body>
+</html>

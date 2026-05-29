@@ -1,0 +1,26 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Models (large files)
+models/
+
+# Database / config data
+config/
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
