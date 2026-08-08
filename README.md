@@ -1,6 +1,7 @@
 # Searcherr
 
-A self-learning torrent search interface powered by [Prowlarr](https://github.com/Prowlarr/Prowlarr) and a local AI model (Phi-3.5-mini). Type a natural language query like *"Re Zero season 4 AV1 under 500MB"* and Searcherr parses your intent, searches across all your Prowlarr indexers, scores the results, and learns your preferences over time.
+A self-learning torrent search interface powered by [Prowlarr](https://github.com/Prowlarr/Prowlarr) Type a natural language query like *"<Series name> <encoding> <under/more> <Size in mb >"* and Searcherr parses your intent, searches across all your Prowlarr indexers, scores the results, and learns your preferences over time.
+With TMDB powered homepage 
 
 ![Searcherr UI](static/logo.png)
 
@@ -8,7 +9,6 @@ A self-learning torrent search interface powered by [Prowlarr](https://github.co
 
 ## Features
 
-- **Natural language search** — powered by Phi-3.5-mini (GGUF) with a regex fallback if no model is present
 - **Self-learning** — picks up on your codec, resolution, release group, and source preferences the more you use it
 - **Auto regex rules** — automatically generates regex bonus rules for release groups you consistently choose
 - **Prowlarr-powered** — searches all your configured indexers in one place
@@ -32,24 +32,24 @@ Create a directory then cd to that directory and create a compose.yml file and p
 ```compose.yml
 services:
   searcherr:
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: soli1239/searcherr:latest
     container_name: searcherr
     restart: unless-stopped
     ports:
       - "8000:8000"
     volumes:
-      - ./config:/app/config #IF you are using se linux add :z like this "./config:/app/config:z" in boh of the volumes
-      - ./models:/app/models
+      - ./config:/app/config
     environment:
-      # All values come from .env — edit that file, not this one
       PROWLARR_URL: "${PROWLARR_URL}"
       PROWLARR_API_KEY: "${PROWLARR_API_KEY}"
       BEARER_TOKEN: "${BEARER_TOKEN}"
-      MODEL_FILENAME: "${MODEL_FILENAME:-Phi-3.5-mini-instruct-Q4_K_M.gguf}"
-      N_CTX: "${N_CTX:-4096}"
-      N_THREADS: "${N_THREADS:-4}"
       REGEX_RULE_THRESHOLD: "${REGEX_RULE_THRESHOLD:-5}"
       EXPLORATION_FACTOR: "${EXPLORATION_FACTOR:-0.1}"
+      TMDB_API_KEY: "${TMDB_API_KEY}"
+
 
 ```
 
@@ -67,20 +67,13 @@ PROWLARR_API_KEY=<Your api key>
 # ── Security ──────────────────────────────────────────────────────────────────
 BEARER_TOKEN=changeme-secret-token #optional
 
-# ── AI Model (optional) ───────────────────────────────────────────────────────
-MODEL_FILENAME=Phi-3.5-mini-instruct-Q4_K_M.gguf
-N_CTX=4096
-N_THREADS=4
-
 # ── Tuning ────────────────────────────────────────────────────────────────────
-REGEX_RULE_THRESHOLD=5 #optional or you an use as it is
-EXPLORATION_FACTOR=0.1 #optional or you an use as it is
+REGEX_RULE_THRESHOLD=5
+EXPLORATION_FACTOR=0.1
+TMDB_API_KEY=<your Tmdb api key for homepage>
 ```
 
 **3. Create required directories**
-```bash
-mkdir -p config models
-```
 
 **4. Run**
 ```bash
@@ -111,15 +104,7 @@ python starting.py
 
 ---
 
-## AI Model (Optional)
 
-Without a model the app still works using a regex-based NLP fallback. To enable full AI parsing:
-
-1. Download `Phi-3.5-mini-instruct-Q4_K_M.gguf` (~2.4 GB) from [HuggingFace](https://huggingface.co/microsoft/Phi-3.5-mini-instruct-gguf)
-2. Place it in the `models/` folder
-3. Set `MODEL_FILENAME=Phi-3.5-mini-instruct-Q4_K_M.gguf` in your `.env`
-
----
 
 ## Environment Variables
 
@@ -145,28 +130,6 @@ docker pull soli1239/searcherr:latest
 
 ---
 
-## Project Structure
-
-```
-searcherr/
-├── main.py              # FastAPI app entry point
-├── config.py            # Config and path setup
-├── starting.py          # Local dev launcher
-├── db/
-│   └── database.py      # SQLite schema and helpers
-├── routers/
-│   └── search.py        # API routes
-├── services/
-│   ├── nlp.py           # Intent parsing (LLM + regex fallback)
-│   ├── prowlarr.py      # Prowlarr API client
-│   └── scorer.py        # Result scoring engine
-├── templates/
-│   └── index.html       # Frontend UI
-├── static/
-│   └── logo.png
-├── Dockerfile
-└── docker-compose.yml
-```
 
 ---
 
