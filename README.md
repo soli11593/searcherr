@@ -26,6 +26,8 @@ With TMDB powered homepage
 - Docker (recommended) **or** Python 3.11+
 
 ---
+<img width="1894" height="939" alt="Screenshot 2026-08-08 201026" src="https://github.com/user-attachments/assets/9a0c2ee7-7e1e-4e5f-84d2-1ee741644080" />
+
 
 ## Quick Start (Docker) Preffered
 
@@ -54,6 +56,7 @@ services:
 
 
 ```
+<img width="1919" height="898" alt="Screenshot 2026-08-08 200940" src="https://github.com/user-attachments/assets/a1ef2c87-f4e6-41ce-811e-cc7379bdb83c" />
 
 
 **2. Create your `.env` file**
