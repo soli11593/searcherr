@@ -118,9 +118,6 @@ python starting.py
 | `PROWLARR_URL` | `http://localhost:9696` | Prowlarr base URL |
 | `PROWLARR_API_KEY` | — | Prowlarr API key (required) |
 | `BEARER_TOKEN` | `changeme-secret-token` | API auth token |
-| `MODEL_FILENAME` | `Phi-3.5-mini-instruct-Q4_K_M.gguf` | GGUF model filename |
-| `N_CTX` | `4096` | LLM context size |
-| `N_THREADS` | `4` | CPU threads for inference |
 | `REGEX_RULE_THRESHOLD` | `5` | Picks before auto-generating a regex rule |
 | `EXPLORATION_FACTOR` | `0.1` | `0.0` = always top-scored, `1.0` = random |
 
