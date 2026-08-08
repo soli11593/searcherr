@@ -17,6 +17,8 @@ With TMDB powered homepage
 - **Docker-ready** — single container, no external database required (SQLite)
 
 ---
+<img width="1885" height="931" alt="Screenshot 2026-08-08 200926" src="https://github.com/user-attachments/assets/1f84d11f-00d8-43fe-9447-6b7e56481655" />
+
 
 ## Requirements
 
